@@ -1,56 +1,110 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from pydantic import BaseModel
-import pymupdf
+from pathlib import Path
+import shutil
+import uuid
 
-app = FastAPI()
+from pydantic import BaseModel
+
+from app.services.document_service import DocumentService
+from app.services.chat_service import ChatService
+
+
+app = FastAPI(
+    title="AI Research Assistant",
+    description="RAG-based document question answering system",
+    version="1.0.0"
+)
+
+
+UPLOAD_DIR = Path("data/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+document_service = DocumentService()
+chat_service = ChatService()
+
 
 class ChatRequest(BaseModel):
     question: str
+    top_k: int = 3
 
 
 @app.get("/")
 def root():
-    return {"message": "AI Research Assistant API is running"}
+    return {
+        "message": "AI Research Assistant API is running"
+    }
 
 
 @app.get("/health")
-def health():
-    return {"status": "healthy"}
-
-@app.post("/chat")
-def chat(request: ChatRequest):
+def health_check():
     return {
-        "question": request.question,
-        "answer": "This is a dummy response."
+        "status": "healthy"
     }
 
 
 @app.post("/documents/upload")
 async def upload_document(file: UploadFile = File(...)):
-    if file.content_type != "application/pdf":
+    if not file.filename:
         raise HTTPException(
             status_code=400,
-            detail="Only PDF files are allowed."
+            detail="No filename provided."
         )
 
-    contents = await file.read()
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are supported."
+        )
 
-    document = pymupdf.open(stream=contents, filetype="pdf")
+    document_id = str(uuid.uuid4())
 
-    pages = []
+    file_path = UPLOAD_DIR / f"{document_id}_{file.filename}"
 
-    for page_number, page in enumerate(document, start=1):
-        text = page.get_text()
+    try:
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
 
-        pages.append({
-            "page": page_number,
-            "text": text
-        })
+        result = document_service.process_pdf(
+            pdf_path=str(file_path),
+            document_id=document_id
+        )
 
-    document.close()
+        return {
+            "message": "Document uploaded and processed successfully.",
+            **result
+        }
 
-    return {
-        "filename": file.filename,
-        "pages": len(pages),
-        "content": pages
-    }
+    except Exception as e:
+        if file_path.exists():
+            file_path.unlink()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document processing failed: {str(e)}"
+        )
+
+    finally:
+        await file.close()
+
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+    if not request.question.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Question cannot be empty."
+        )
+
+    try:
+        result = chat_service.answer_question(
+            question=request.question,
+            top_k=request.top_k
+        )
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Question processing failed: {str(e)}"
+        )
