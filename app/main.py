@@ -3,7 +3,9 @@ from pathlib import Path
 import shutil
 import uuid
 
-from pydantic import BaseModel
+#from pydantic import BaseModel
+
+from app.schemas.chat import ChatRequest
 
 from app.services.document_service import DocumentService
 from app.services.chat_service import ChatService
@@ -22,10 +24,6 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 document_service = DocumentService()
 chat_service = ChatService()
 
-
-class ChatRequest(BaseModel):
-    question: str
-    top_k: int = 3
 
 
 @app.get("/")
@@ -98,7 +96,8 @@ def chat(request: ChatRequest):
     try:
         result = chat_service.answer_question(
             question=request.question,
-            top_k=request.top_k
+            top_k=request.top_k,
+            document_id=request.document_id
         )
 
         return result

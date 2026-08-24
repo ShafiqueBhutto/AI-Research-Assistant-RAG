@@ -38,15 +38,25 @@ class VectorStore:
     def search_similar_chunks(
         self,
         query: str,
-        top_k: int = 3
+        top_k: int = 3,
+        document_id: str | None = None
     ):
         query_embedding = (
             self.embedding_service.generate_query_embedding(query)
         )
 
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k
-        )
+        if document_id:
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=top_k,
+                where={
+                    "document_id": document_id
+                }
+            )
+        else:
+            results = self.collection.query(
+                query_embeddings=[query_embedding],
+                n_results=top_k
+            )
 
         return results

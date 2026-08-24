@@ -10,11 +10,13 @@ class ChatService:
     def retrieve_context(
         self,
         question: str,
-        top_k: int = 3
+        top_k: int = 3,
+        document_id: str | None = None
     ):
         results = self.vector_store.search_similar_chunks(
             query=question,
-            top_k=top_k
+            top_k=top_k,
+            document_id=document_id
         )
 
         documents = results.get("documents", [[]])[0]
@@ -39,35 +41,25 @@ class ChatService:
     def answer_question(
         self,
         question: str,
-        top_k: int = 3
+        top_k: int = 3,
+        document_id: str | None = None
     ):
         retrieved_chunks = self.retrieve_context(
             question=question,
-            top_k=top_k
+            top_k=top_k,
+            document_id=document_id
         )
 
         if not retrieved_chunks:
             return {
-                "answer": "I could not find relevant information in the provided documents.",
+                "answer": "I could not find relevant information in the provided document.",
                 "sources": []
             }
 
-        context_parts = []
-
-        for chunk in retrieved_chunks:
-            metadata = chunk["metadata"]
-
-            source = (
-                f"Document: {metadata.get('filename', 'Unknown')}, "
-                f"Page: {metadata.get('page', 'Unknown')}"
-            )
-
-            context_parts.append(
-                f"{source}\n"
-                f"{chunk['text']}"
-            )
-
-        context = "\n\n---\n\n".join(context_parts)
+        context = "\n\n".join(
+            chunk["text"]
+            for chunk in retrieved_chunks
+        )
 
         answer = self.llm_service.generate_answer(
             question=question,
