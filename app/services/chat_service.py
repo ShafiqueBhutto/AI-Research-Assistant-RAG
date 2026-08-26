@@ -1,5 +1,12 @@
+from sqlalchemy.orm import Session
+
 from app.rag.vector_store import VectorStore
 from app.services.llm_service import LLMService
+from app.db.repository import (
+    create_chat_session,
+    create_chat_message,
+    get_chat_session
+)
 
 
 class ChatService:
@@ -40,6 +47,7 @@ class ChatService:
 
     def answer_question(
         self,
+        db: Session,
         question: str,
         top_k: int = 3,
         document_id: str | None = None
@@ -52,7 +60,10 @@ class ChatService:
 
         if not retrieved_chunks:
             return {
-                "answer": "I could not find relevant information in the provided document.",
+                "answer": (
+                    "I could not find relevant information "
+                    "in the provided document."
+                ),
                 "sources": []
             }
 
@@ -77,7 +88,23 @@ class ChatService:
                 "distance": chunk["distance"]
             })
 
+        # Create a new chat session
+        chat_session = create_chat_session(
+            db=db,
+            document_id=document_id
+        )
+
+        # Save the question, answer and sources
+        create_chat_message(
+            db=db,
+            session_id=chat_session.session_id,
+            question=question,
+            answer=answer,
+            sources=sources
+        )
+
         return {
+            "session_id": chat_session.session_id,
             "answer": answer,
             "sources": sources
         }
