@@ -10,11 +10,7 @@ from app.services.document_service import DocumentService
 from app.services.chat_service import ChatService
 
 from app.db.database import get_db
-from app.db.repository import (
-    create_document,
-    create_chat_session,
-    create_chat_message
-)
+from app.db.repository import create_document
 
 
 app = FastAPI(
@@ -124,7 +120,8 @@ def chat(
             db=db,
             question=request.question,
             top_k=request.top_k,
-            document_id=request.document_id
+            document_id=request.document_id,
+             session_id=request.session_id
         )
 
         return result
@@ -134,4 +131,25 @@ def chat(
             status_code=500,
             detail=f"Question processing failed: {str(e)}"
         )
+
+
+@app.get("/chat/{session_id}")
+def get_chat_history(
+    session_id: str,
+    db: Session = Depends(get_db)
+):
+    history = chat_service.get_chat_history(
+        db=db,
+        session_id=session_id
+    )
+
+    if history is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Chat session not found."
+        )
+
+    return history
+
+    
 
