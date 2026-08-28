@@ -86,3 +86,11 @@ class DocumentService:
             start += chunk_size - overlap
 
         return chunks
+
+    def delete_document(
+        self,
+        document_id: str
+    ):
+        self.vector_store.delete_document(
+            document_id=document_id
+        )

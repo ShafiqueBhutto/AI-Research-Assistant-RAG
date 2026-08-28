@@ -60,3 +60,13 @@ class VectorStore:
             )
 
         return results
+
+    def delete_document(
+        self,
+        document_id: str
+    ):
+        self.collection.delete(
+            where={
+                "document_id": document_id
+            }
+        )

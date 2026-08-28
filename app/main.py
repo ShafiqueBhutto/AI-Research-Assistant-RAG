@@ -5,13 +5,18 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.db.models import Document
 from app.schemas.chat import ChatRequest
 from app.services.document_service import DocumentService
 from app.services.chat_service import ChatService
 
 from app.db.database import get_db
-from app.db.repository import create_document
-
+from app.db.repository import (
+    create_document,
+    get_documents,
+    get_document,
+    delete_document
+)
 
 app = FastAPI(
     title="AI Research Assistant",
@@ -39,6 +44,105 @@ def health_check():
     return {
         "status": "healthy"
     }
+
+
+@app.get("/documents")
+def list_documents(
+    db: Session = Depends(get_db)
+):
+    documents = get_documents(db=db)
+
+    return [
+        {
+            "document_id": document.document_id,
+            "filename": document.filename,
+            "file_path": document.file_path,
+            "chunks_stored": document.chunks_stored,
+            "created_at": document.created_at
+        }
+        for document in documents
+    ]
+
+
+
+
+@app.get("/documents/{document_id}")
+def get_document_by_id(
+    document_id: str,
+    db: Session = Depends(get_db)
+):
+    document = get_document(
+        db=db,
+        document_id=document_id
+    )
+
+    if document is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found."
+        )
+
+    return {
+        "document_id": document.document_id,
+        "filename": document.filename,
+        "file_path": document.file_path,
+        "chunks_stored": document.chunks_stored,
+        "created_at": document.created_at
+    }
+
+
+
+@app.delete("/documents/{document_id}")
+def delete_document_by_id(
+    document_id: str,
+    db: Session = Depends(get_db)
+):
+    document = (
+        db.query(Document)
+        .filter(
+            Document.document_id == document_id
+        )
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=404,
+            detail="Document not found."
+        )
+
+    file_path = Path(document.file_path)
+
+    try:
+        # Delete chunks from ChromaDB
+        document_service.delete_document(
+            document_id=document_id
+        )
+
+        # Delete metadata from PostgreSQL
+        delete_document(
+            db=db,
+            document_id=document_id
+        )
+
+        # Delete actual PDF file
+        if file_path.exists():
+            file_path.unlink()
+
+        return {
+            "message": "Document deleted successfully.",
+            "document_id": document_id
+        }
+
+    except Exception as e:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=f"Document deletion failed: {str(e)}"
+        )
+
+
 
 
 @app.post("/documents/upload")

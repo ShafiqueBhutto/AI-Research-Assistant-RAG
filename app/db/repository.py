@@ -88,3 +88,44 @@ def get_chat_messages(
         .order_by(ChatMessage.created_at.asc())
         .all()
     )
+
+def get_documents(db: Session):
+    return (
+        db.query(Document)
+        .order_by(Document.created_at.desc())
+        .all()
+    )
+
+def get_document(
+    db: Session,
+    document_id: str
+):
+    return (
+        db.query(Document)
+        .filter(
+            Document.document_id == document_id
+        )
+        .first()
+    )
+
+
+
+def delete_document(
+    db: Session,
+    document_id: str
+):
+    document = (
+        db.query(Document)
+        .filter(
+            Document.document_id == document_id
+        )
+        .first()
+    )
+
+    if not document:
+        return None
+
+    db.delete(document)
+    db.commit()
+
+    return document
