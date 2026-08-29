@@ -76,6 +76,53 @@ def get_chat_session(
         .first()
     )
 
+def get_chat_sessions(
+    db: Session
+):
+    sessions = (
+        db.query(ChatSession)
+        .order_by(
+            ChatSession.created_at.desc()
+        )
+        .all()
+    )
+
+    result = []
+
+    for session in sessions:
+
+        first_message = (
+            db.query(ChatMessage)
+            .filter(
+                ChatMessage.session_id == session.session_id
+            )
+            .order_by(
+                ChatMessage.created_at.asc()
+            )
+            .first()
+        )
+
+        title = "New Chat"
+
+        if first_message:
+            title = first_message.question
+
+            # Keep sidebar title short
+            if len(title) > 60:
+                title = title[:60] + "..."
+
+        result.append(
+            {
+                "session_id": session.session_id,
+                "document_id": session.document_id,
+                "title": title,
+                "created_at": session.created_at
+            }
+        )
+
+    return result
+
+
 def get_chat_messages(
     db: Session,
     session_id: str
@@ -129,3 +176,15 @@ def delete_document(
     db.commit()
 
     return document
+
+def get_chat_session_with_document(
+    db: Session,
+    session_id: str
+):
+    return (
+        db.query(ChatSession)
+        .filter(
+            ChatSession.session_id == session_id
+        )
+        .first()
+    )

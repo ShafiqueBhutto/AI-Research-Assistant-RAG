@@ -15,7 +15,10 @@ from app.db.repository import (
     create_document,
     get_documents,
     get_document,
-    delete_document
+    create_chat_session,
+    delete_document,
+    create_chat_message,
+    get_chat_sessions
 )
 
 app = FastAPI(
@@ -206,6 +209,13 @@ async def upload_document(
 
     finally:
         await file.close()
+
+
+@app.get("/chat")
+def list_chat_sessions(
+    db: Session = Depends(get_db)
+):
+    return get_chat_sessions(db=db)
 
 
 @app.post("/chat")
