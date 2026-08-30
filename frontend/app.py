@@ -2,16 +2,16 @@ import requests
 import streamlit as st
 
 
-# -----------------------------
-# Configuration
-# -----------------------------
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 API_URL = "http://127.0.0.1:8000"
 
 
-# -----------------------------
-# Page Configuration
-# -----------------------------
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
 st.set_page_config(
     page_title="AI Research Assistant",
@@ -20,36 +20,32 @@ st.set_page_config(
 )
 
 
-# -----------------------------
-# Initialize Session State
-# -----------------------------
+# ============================================================
+# SESSION STATE
+# ============================================================
 
-if "document_id" not in st.session_state:
-    st.session_state["document_id"] = None
+DEFAULT_STATE = {
+    "document_id": None,
+    "filename": None,
+    "chunks_stored": 0,
+    "session_id": None,
+    "messages": [],
+    "documents": [],
+    "chat_sessions": [],
+    "data_loaded": False
+}
 
-if "filename" not in st.session_state:
-    st.session_state["filename"] = None
 
-if "chunks_stored" not in st.session_state:
-    st.session_state["chunks_stored"] = 0
+for key, value in DEFAULT_STATE.items():
 
-if "session_id" not in st.session_state:
-    st.session_state["session_id"] = None
+    if key not in st.session_state:
 
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
-
-if "documents" not in st.session_state:
-    st.session_state["documents"] = []
-
-if "chat_sessions" not in st.session_state:
-    st.session_state["chat_sessions"] = []
+        st.session_state[key] = value
 
 
 # ============================================================
-# HELPER FUNCTIONS
+# API HELPERS
 # ============================================================
-
 
 def load_documents():
 
@@ -61,10 +57,12 @@ def load_documents():
         )
 
         if response.status_code == 200:
+
             return response.json()
 
         st.error(
-            f"Could not load documents: {response.text}"
+            f"Could not load documents: "
+            f"{response.text}"
         )
 
         return []
@@ -88,10 +86,12 @@ def load_chat_sessions():
         )
 
         if response.status_code == 200:
+
             return response.json()
 
         st.error(
-            f"Could not load chat sessions: {response.text}"
+            f"Could not load chat sessions: "
+            f"{response.text}"
         )
 
         return []
@@ -115,14 +115,20 @@ def load_chat_history(session_id):
         )
 
         if response.status_code == 200:
+
             return response.json()
 
         if response.status_code == 404:
-            st.error("Chat session not found.")
+
+            st.error(
+                "Chat session not found."
+            )
+
             return None
 
         st.error(
-            f"Could not load chat history: {response.text}"
+            f"Could not load chat history: "
+            f"{response.text}"
         )
 
         return None
@@ -146,11 +152,13 @@ def get_document_by_id(document_id):
         )
 
         if response.status_code == 200:
+
             return response.json()
 
         return None
 
     except requests.exceptions.RequestException:
+
         return None
 
 
@@ -158,59 +166,46 @@ def get_document_by_id(document_id):
 # INITIAL DATA LOAD
 # ============================================================
 
+if not st.session_state["data_loaded"]:
 
-if not st.session_state["documents"]:
+    st.session_state["documents"] = (
+        load_documents()
+    )
 
-    st.session_state["documents"] = load_documents()
+    st.session_state["chat_sessions"] = (
+        load_chat_sessions()
+    )
 
-
-if not st.session_state["chat_sessions"]:
-
-    st.session_state["chat_sessions"] = load_chat_sessions()
-
-
-# ============================================================
-# TITLE
-# ============================================================
-
-
-st.title("🤖 AI Research Assistant")
-
-st.markdown(
-    """
-    Upload a PDF document and ask questions about its content.
-
-    The system uses **RAG (Retrieval-Augmented Generation)** to retrieve
-    relevant information from your documents and generate grounded answers.
-    """
-)
+    st.session_state["data_loaded"] = True
 
 
 # ============================================================
 # SIDEBAR
 # ============================================================
 
+with st.sidebar:
 
-# -----------------------------
-# Upload Document
-# -----------------------------
+    st.title("🤖 AI Research Assistant")
 
-st.sidebar.header("📄 Upload Document")
+    st.markdown("---")
 
-uploaded_file = st.sidebar.file_uploader(
-    "Choose a PDF file",
-    type=["pdf"]
-)
+    # ========================================================
+    # UPLOAD DOCUMENT
+    # ========================================================
 
+    st.header("📄 Upload Document")
 
-if uploaded_file is not None:
+    uploaded_file = st.file_uploader(
+        "Choose a PDF file",
+        type=["pdf"]
+    )
 
-    if st.sidebar.button(
-        "Upload PDF",
-        use_container_width=True
-    ):
+    if uploaded_file is not None:
 
-        with st.sidebar:
+        if st.button(
+            "⬆️ Upload PDF",
+            use_container_width=True
+        ):
 
             with st.spinner(
                 "Uploading and processing document..."
@@ -236,40 +231,46 @@ if uploaded_file is not None:
 
                         result = response.json()
 
-                        # Save current document
-                        st.session_state["document_id"] = (
-                            result["document_id"]
-                        )
+                        st.session_state[
+                            "document_id"
+                        ] = result["document_id"]
 
-                        st.session_state["filename"] = (
-                            result["filename"]
-                        )
+                        st.session_state[
+                            "filename"
+                        ] = result["filename"]
 
-                        st.session_state["chunks_stored"] = (
-                            result["chunks_stored"]
-                        )
+                        st.session_state[
+                            "chunks_stored"
+                        ] = result["chunks_stored"]
 
-                        # Start fresh conversation
-                        st.session_state["session_id"] = None
-                        st.session_state["messages"] = []
+                        # New document = new conversation
+                        st.session_state[
+                            "session_id"
+                        ] = None
 
-                        # Refresh data
-                        st.session_state["documents"] = (
-                            load_documents()
-                        )
+                        st.session_state[
+                            "messages"
+                        ] = []
 
-                        st.session_state["chat_sessions"] = (
-                            load_chat_sessions()
-                        )
+                        st.session_state[
+                            "documents"
+                        ] = load_documents()
+
+                        st.session_state[
+                            "chat_sessions"
+                        ] = load_chat_sessions()
 
                         st.success(
                             "Document uploaded successfully!"
                         )
 
+                        st.rerun()
+
                     else:
 
                         st.error(
-                            f"Upload failed: {response.text}"
+                            f"Upload failed: "
+                            f"{response.text}"
                         )
 
                 except requests.exceptions.RequestException as e:
@@ -278,399 +279,397 @@ if uploaded_file is not None:
                         f"Could not connect to FastAPI: {e}"
                     )
 
+    # ========================================================
+    # DOCUMENT MANAGEMENT
+    # ========================================================
 
-# ============================================================
-# DOCUMENT MANAGEMENT
-# ============================================================
+    st.markdown("---")
 
+    st.header("📚 Documents")
 
-st.sidebar.markdown("---")
+    if st.button(
+        "🔄 Refresh Documents",
+        use_container_width=True
+    ):
 
-st.sidebar.header("📚 Documents")
+        st.session_state[
+            "documents"
+        ] = load_documents()
 
+        st.rerun()
 
-# -----------------------------
-# Refresh Documents
-# -----------------------------
+    documents = st.session_state[
+        "documents"
+    ]
 
-if st.sidebar.button(
-    "🔄 Refresh Documents",
-    use_container_width=True
-):
+    if documents:
 
-    st.session_state["documents"] = load_documents()
+        filenames = [
+            document["filename"]
+            for document in documents
+        ]
 
-    st.rerun()
+        current_index = 0
 
+        current_document_id = (
+            st.session_state["document_id"]
+        )
 
-documents = st.session_state["documents"]
-
-
-# -----------------------------
-# Document Selection
-# -----------------------------
-
-if documents:
-
-    document_options = {
-        document["filename"]: document["document_id"]
-        for document in documents
-    }
-
-    filenames = list(document_options.keys())
-
-    current_index = 0
-
-    if st.session_state["document_id"]:
-
-        for index, document in enumerate(documents):
+        for index, document in enumerate(
+            documents
+        ):
 
             if (
                 document["document_id"]
-                == st.session_state["document_id"]
+                == current_document_id
             ):
 
                 current_index = index
+
                 break
 
-    selected_filename = st.sidebar.selectbox(
-        "Select a document",
-        filenames,
-        index=current_index
-    )
-
-    selected_document_id = document_options[
-        selected_filename
-    ]
-
-    # -----------------------------
-    # Detect document change
-    # -----------------------------
-
-    if (
-        selected_document_id
-        != st.session_state["document_id"]
-    ):
+        selected_filename = st.selectbox(
+            "Select a document",
+            filenames,
+            index=current_index
+        )
 
         selected_document = next(
             (
                 document
                 for document in documents
-                if document["document_id"]
-                == selected_document_id
+                if document["filename"]
+                == selected_filename
             ),
             None
         )
 
         if selected_document:
 
-            st.session_state["document_id"] = (
+            selected_document_id = (
                 selected_document["document_id"]
             )
 
-            st.session_state["filename"] = (
+            # ------------------------------------------------
+            # Document changed
+            # ------------------------------------------------
+
+            if (
+                selected_document_id
+                != st.session_state["document_id"]
+            ):
+
+                st.session_state[
+                    "document_id"
+                ] = selected_document_id
+
+                st.session_state[
+                    "filename"
+                ] = selected_document["filename"]
+
+                st.session_state[
+                    "chunks_stored"
+                ] = selected_document[
+                    "chunks_stored"
+                ]
+
+                # New document -> new chat
+                st.session_state[
+                    "session_id"
+                ] = None
+
+                st.session_state[
+                    "messages"
+                ] = []
+
+                st.rerun()
+
+            st.caption(
+                "📄 Selected Document"
+            )
+
+            st.write(
                 selected_document["filename"]
             )
 
-            st.session_state["chunks_stored"] = (
-                selected_document["chunks_stored"]
+            st.caption(
+                f"Chunks stored: "
+                f"{selected_document['chunks_stored']}"
             )
 
-            # New document = fresh conversation
-            st.session_state["session_id"] = None
-            st.session_state["messages"] = []
+            # ------------------------------------------------
+            # Delete document
+            # ------------------------------------------------
 
-    # -----------------------------
-    # Selected Document
-    # -----------------------------
+            if st.button(
+                "🗑️ Delete Selected Document",
+                use_container_width=True
+            ):
 
-    selected_document = next(
-        (
-            document
-            for document in documents
-            if document["document_id"]
-            == st.session_state["document_id"]
-        ),
-        None
-    )
-
-    if selected_document:
-
-        st.sidebar.caption(
-            "📄 Selected Document"
-        )
-
-        st.sidebar.write(
-            selected_document["filename"]
-        )
-
-        st.sidebar.caption(
-            f"Chunks stored: "
-            f"{selected_document['chunks_stored']}"
-        )
-
-        # -----------------------------
-        # Delete Document
-        # -----------------------------
-
-        if st.sidebar.button(
-            "🗑️ Delete Selected Document",
-            use_container_width=True
-        ):
-
-            document_id = (
-                selected_document["document_id"]
-            )
-
-            try:
-
-                response = requests.delete(
-                    f"{API_URL}/documents/{document_id}",
-                    timeout=60
+                document_id = (
+                    selected_document[
+                        "document_id"
+                    ]
                 )
 
-                if response.status_code == 200:
+                try:
 
-                    st.session_state["document_id"] = None
-                    st.session_state["filename"] = None
-                    st.session_state["chunks_stored"] = 0
-
-                    st.session_state["session_id"] = None
-                    st.session_state["messages"] = []
-
-                    st.session_state["documents"] = (
-                        load_documents()
+                    response = requests.delete(
+                        f"{API_URL}/documents/"
+                        f"{document_id}",
+                        timeout=60
                     )
 
-                    st.session_state["chat_sessions"] = (
-                        load_chat_sessions()
-                    )
+                    if response.status_code == 200:
 
-                    st.success(
-                        "Document deleted successfully!"
-                    )
+                        st.session_state[
+                            "document_id"
+                        ] = None
 
-                    st.rerun()
+                        st.session_state[
+                            "filename"
+                        ] = None
 
-                elif response.status_code == 404:
+                        st.session_state[
+                            "chunks_stored"
+                        ] = 0
+
+                        st.session_state[
+                            "session_id"
+                        ] = None
+
+                        st.session_state[
+                            "messages"
+                        ] = []
+
+                        st.session_state[
+                            "documents"
+                        ] = load_documents()
+
+                        st.session_state[
+                            "chat_sessions"
+                        ] = load_chat_sessions()
+
+                        st.success(
+                            "Document deleted successfully!"
+                        )
+
+                        st.rerun()
+
+                    else:
+
+                        st.error(
+                            f"Delete failed: "
+                            f"{response.text}"
+                        )
+
+                except requests.exceptions.RequestException as e:
 
                     st.error(
-                        "Document not found."
+                        f"Could not connect to FastAPI: {e}"
                     )
 
-                else:
+    else:
 
-                    st.error(
-                        f"Delete failed: {response.text}"
-                    )
-
-            except requests.exceptions.RequestException as e:
-
-                st.error(
-                    f"Could not connect to FastAPI: {e}"
-                )
-
-else:
-
-    st.sidebar.info(
-        "No documents uploaded yet."
-    )
-
-
-# ============================================================
-# PREVIOUS CHATS
-# ============================================================
-
-
-st.sidebar.markdown("---")
-
-st.sidebar.header("💬 Previous Chats")
-
-
-# -----------------------------
-# Refresh Chats
-# -----------------------------
-
-if st.sidebar.button(
-    "🔄 Refresh Chats",
-    use_container_width=True
-):
-
-    st.session_state["chat_sessions"] = (
-        load_chat_sessions()
-    )
-
-    st.rerun()
-
-
-chat_sessions = st.session_state["chat_sessions"]
-
-
-# -----------------------------
-# Previous Chat Selection
-# -----------------------------
-
-if chat_sessions:
-
-    chat_options = {}
-
-    for session in chat_sessions:
-
-        title = session.get(
-            "title",
-            "New Chat"
+        st.info(
+            "No documents uploaded yet."
         )
 
-        session_id = session["session_id"]
+    # ========================================================
+    # PREVIOUS CHATS
+    # ========================================================
 
-        # Add small identifier in case
-        # multiple chats have same title
-        display_title = title
+    st.markdown("---")
 
-        if len(display_title) > 45:
-            display_title = (
-                display_title[:45] + "..."
-            )
+    st.header("💬 Previous Chats")
 
-        chat_options[
-            f"💬 {display_title}"
-        ] = session_id
-
-
-    selected_chat_title = st.sidebar.selectbox(
-        "Select a previous chat",
-        list(chat_options.keys())
-    )
-
-
-    selected_session_id = chat_options[
-        selected_chat_title
-    ]
-
-
-    # -----------------------------
-    # Load Selected Chat
-    # -----------------------------
-
-    if st.sidebar.button(
-        "📂 Open Chat",
+    if st.button(
+        "🔄 Refresh Chats",
         use_container_width=True
     ):
 
-        history = load_chat_history(
-            selected_session_id
+        st.session_state[
+            "chat_sessions"
+        ] = load_chat_sessions()
+
+        st.rerun()
+
+    chat_sessions = st.session_state[
+        "chat_sessions"
+    ]
+
+    if chat_sessions:
+
+        chat_titles = []
+
+        chat_mapping = {}
+
+        for session in chat_sessions:
+
+            title = session.get(
+                "title",
+                "New Chat"
+            )
+
+            display_title = title
+
+            if len(display_title) > 45:
+
+                display_title = (
+                    display_title[:45]
+                    + "..."
+                )
+
+            display = (
+                f"💬 {display_title}"
+            )
+
+            chat_titles.append(display)
+
+            chat_mapping[display] = (
+                session["session_id"]
+            )
+
+        selected_chat = st.selectbox(
+            "Select a previous chat",
+            chat_titles
         )
 
-        if history:
+        selected_session_id = (
+            chat_mapping[selected_chat]
+        )
 
-            st.session_state["session_id"] = (
-                history["session_id"]
+        if st.button(
+            "📂 Open Chat",
+            use_container_width=True
+        ):
+
+            history = load_chat_history(
+                selected_session_id
             )
 
-            st.session_state["messages"] = []
+            if history:
 
-            for message in history.get(
-                "messages",
-                []
-            ):
+                st.session_state[
+                    "session_id"
+                ] = history["session_id"]
 
-                st.session_state["messages"].append(
-                    {
-                        "question": message["question"],
-                        "answer": message["answer"],
-                        "sources": message.get(
-                            "sources",
-                            []
+                st.session_state[
+                    "messages"
+                ] = []
+
+                # --------------------------------------------
+                # Restore conversation
+                # --------------------------------------------
+
+                for message in history.get(
+                    "messages",
+                    []
+                ):
+
+                    st.session_state[
+                        "messages"
+                    ].append(
+                        {
+                            "question": message[
+                                "question"
+                            ],
+                            "answer": message[
+                                "answer"
+                            ],
+                            "sources": message.get(
+                                "sources",
+                                []
+                            )
+                        }
+                    )
+
+                # --------------------------------------------
+                # Restore document
+                # --------------------------------------------
+
+                document_id = history.get(
+                    "document_id"
+                )
+
+                if document_id:
+
+                    document = (
+                        get_document_by_id(
+                            document_id
                         )
-                    }
-                )
-
-
-            # Restore associated document
-            document_id = history.get(
-                "document_id"
-            )
-
-            if document_id:
-
-                document = get_document_by_id(
-                    document_id
-                )
-
-                if document:
-
-                    st.session_state["document_id"] = (
-                        document["document_id"]
                     )
 
-                    st.session_state["filename"] = (
-                        document["filename"]
-                    )
+                    if document:
 
-                    st.session_state["chunks_stored"] = (
-                        document["chunks_stored"]
-                    )
+                        st.session_state[
+                            "document_id"
+                        ] = document[
+                            "document_id"
+                        ]
 
+                        st.session_state[
+                            "filename"
+                        ] = document[
+                            "filename"
+                        ]
 
-            st.success(
-                "Previous chat loaded successfully!"
-            )
+                        st.session_state[
+                            "chunks_stored"
+                        ] = document[
+                            "chunks_stored"
+                        ]
 
-            st.rerun()
+                st.rerun()
 
+    else:
 
-else:
+        st.info(
+            "No previous chats yet."
+        )
 
-    st.sidebar.info(
-        "No previous chats yet."
-    )
+    # ========================================================
+    # NEW CHAT
+    # ========================================================
 
+    st.markdown("---")
 
-# ============================================================
-# NEW CHAT
-# ============================================================
+    if st.button(
+        "➕ New Chat",
+        use_container_width=True
+    ):
 
+        st.session_state[
+            "session_id"
+        ] = None
 
-st.sidebar.markdown("---")
+        st.session_state[
+            "messages"
+        ] = []
 
-
-if st.sidebar.button(
-    "➕ New Chat",
-    use_container_width=True
-):
-
-    st.session_state["session_id"] = None
-    st.session_state["messages"] = []
-
-    st.rerun()
-
-
-# ============================================================
-# ACTIVE CHAT SESSION
-# ============================================================
-
-
-if st.session_state["session_id"]:
-
-    st.sidebar.markdown("---")
-
-    st.sidebar.caption(
-        "💬 Active Chat Session"
-    )
-
-    st.sidebar.code(
-        st.session_state["session_id"]
-    )
+        st.rerun()
 
 
 # ============================================================
-# MAIN CONTENT
+# MAIN PAGE
 # ============================================================
 
+st.title("🤖 AI Research Assistant")
 
-# -----------------------------
-# Current Document
-# -----------------------------
+st.markdown(
+    """
+    Upload a PDF and ask questions about its content.
+
+    **RAG (Retrieval-Augmented Generation)** retrieves
+    relevant information from your documents and generates
+    grounded answers with source references.
+    """
+)
+
+
+# ============================================================
+# CURRENT DOCUMENT
+# ============================================================
 
 if st.session_state["filename"]:
 
@@ -686,24 +685,21 @@ if st.session_state["filename"]:
 
 else:
 
-    st.info(
-        "📄 Please upload or select a document to start."
+    st.warning(
+        "📄 Please upload or select a document first."
     )
 
 
 # ============================================================
-# CHAT
+# CHAT HEADER
 # ============================================================
-
 
 st.header("💬 Ask a Question")
 
 
-question = st.text_input(
-    "Enter your question",
-    placeholder="Example: What skills does Shafique Bhutto have?"
-)
-
+# ============================================================
+# TOP K
+# ============================================================
 
 top_k = st.slider(
     "Number of relevant chunks",
@@ -713,29 +709,121 @@ top_k = st.slider(
 )
 
 
-# -----------------------------
-# Ask Question
-# -----------------------------
+# ============================================================
+# DISPLAY EXISTING CHAT
+# ============================================================
+
+for message in st.session_state["messages"]:
+
+    with st.chat_message("user"):
+
+        st.markdown(
+            message["question"]
+        )
+
+    with st.chat_message("assistant"):
+
+        st.markdown(
+            message["answer"]
+        )
+
+        sources = message.get(
+            "sources",
+            []
+        )
+
+        if sources:
+
+            with st.expander(
+                f"📚 Sources ({len(sources)})"
+            ):
+
+                for index, source in enumerate(
+                    sources,
+                    start=1
+                ):
+
+                    filename = source.get(
+                        "filename",
+                        "Unknown"
+                    )
+
+                    page = source.get(
+                        "page",
+                        "Unknown"
+                    )
+
+                    distance = source.get(
+                        "distance",
+                        0
+                    )
+
+                    st.markdown(
+                        f"""
+**Source {index}**
+
+📄 File: `{filename}`
+
+📑 Page: `{page}`
+
+🔎 Distance: `{distance:.4f}`
+"""
+                    )
 
 
-if st.button("🔍 Ask"):
+# ============================================================
+# CHAT INPUT
+# ============================================================
 
-    if not question.strip():
+question = st.chat_input(
+    "Ask something about your document..."
+)
+
+
+# ============================================================
+# PROCESS QUESTION
+# ============================================================
+
+if question:
+
+    question = question.strip()
+
+    if not question:
 
         st.warning(
             "Please enter a question."
         )
 
-    elif not st.session_state["document_id"]:
+        st.stop()
+
+    if not st.session_state[
+        "document_id"
+    ]:
 
         st.warning(
             "Please upload or select a PDF document first."
         )
 
-    else:
+        st.stop()
+
+    # --------------------------------------------------------
+    # Display user message immediately
+    # --------------------------------------------------------
+
+    with st.chat_message("user"):
+
+        st.markdown(
+            question
+        )
+
+    # --------------------------------------------------------
+    # Generate answer
+    # --------------------------------------------------------
+
+    with st.chat_message("assistant"):
 
         with st.spinner(
-            "Searching documents and generating answer..."
+            "Searching the document..."
         ):
 
             try:
@@ -744,17 +832,25 @@ if st.button("🔍 Ask"):
                     "question": question,
                     "top_k": top_k,
                     "document_id": (
-                        st.session_state["document_id"]
+                        st.session_state[
+                            "document_id"
+                        ]
                     )
                 }
 
+                # --------------------------------------------
+                # Continue existing chat
+                # --------------------------------------------
 
-                if st.session_state["session_id"]:
+                if st.session_state[
+                    "session_id"
+                ]:
 
-                    request_data["session_id"] = (
-                        st.session_state["session_id"]
-                    )
-
+                    request_data[
+                        "session_id"
+                    ] = st.session_state[
+                        "session_id"
+                    ]
 
                 response = requests.post(
                     f"{API_URL}/chat",
@@ -762,48 +858,134 @@ if st.button("🔍 Ask"):
                     timeout=120
                 )
 
+                # --------------------------------------------
+                # Successful response
+                # --------------------------------------------
 
                 if response.status_code == 200:
 
                     result = response.json()
 
-
-                    # Save session ID
-                    st.session_state["session_id"] = (
-                        result["session_id"]
+                    answer = result.get(
+                        "answer",
+                        "No answer generated."
                     )
 
+                    sources = result.get(
+                        "sources",
+                        []
+                    )
 
-                    # Save message
-                    st.session_state["messages"].append(
+                    # ----------------------------------------
+                    # Save session ID
+                    # ----------------------------------------
+
+                    st.session_state[
+                        "session_id"
+                    ] = result[
+                        "session_id"
+                    ]
+
+                    # ----------------------------------------
+                    # Save message locally
+                    # ----------------------------------------
+
+                    st.session_state[
+                        "messages"
+                    ].append(
                         {
                             "question": question,
-                            "answer": result["answer"],
-                            "sources": result.get(
-                                "sources",
-                                []
-                            )
+                            "answer": answer,
+                            "sources": sources
                         }
                     )
 
+                    # ----------------------------------------
+                    # Show answer
+                    # ----------------------------------------
 
-                    # Refresh previous chats
-                    st.session_state["chat_sessions"] = (
-                        load_chat_sessions()
+                    st.markdown(
+                        answer
                     )
 
+                    # ----------------------------------------
+                    # Show sources
+                    # ----------------------------------------
 
-                    st.success(
-                        "Answer generated successfully!"
-                    )
+                    if sources:
 
+                        with st.expander(
+                            f"📚 Sources "
+                            f"({len(sources)})"
+                        ):
+
+                            for index, source in enumerate(
+                                sources,
+                                start=1
+                            ):
+
+                                filename = source.get(
+                                    "filename",
+                                    "Unknown"
+                                )
+
+                                page = source.get(
+                                    "page",
+                                    "Unknown"
+                                )
+
+                                distance = source.get(
+                                    "distance",
+                                    0
+                                )
+
+                                st.markdown(
+                                    f"""
+**Source {index}**
+
+📄 File: `{filename}`
+
+📑 Page: `{page}`
+
+🔎 Distance: `{distance:.4f}`
+"""
+                                )
+
+                    # ----------------------------------------
+                    # Refresh chat list
+                    # ----------------------------------------
+
+                    st.session_state[
+                        "chat_sessions"
+                    ] = load_chat_sessions()
 
                 else:
 
+                    try:
+
+                        error_detail = (
+                            response.json()
+                            .get(
+                                "detail",
+                                response.text
+                            )
+                        )
+
+                    except Exception:
+
+                        error_detail = response.text
+
                     st.error(
-                        f"Chat request failed: {response.text}"
+                        f"Chat request failed: "
+                        f"{error_detail}"
                     )
 
+            except requests.exceptions.Timeout:
+
+                st.error(
+                    "The request took too long. "
+                    "Please try again."
+                )
 
             except requests.exceptions.RequestException as e:
 
@@ -811,71 +993,8 @@ if st.button("🔍 Ask"):
                     f"Could not connect to FastAPI: {e}"
                 )
 
+            except Exception as e:
 
-# ============================================================
-# CONVERSATION HISTORY
-# ============================================================
-
-
-if st.session_state["messages"]:
-
-    st.header("💬 Conversation")
-
-
-    for i, message in enumerate(
-        st.session_state["messages"],
-        start=1
-    ):
-
-        st.markdown(
-            f"### 👤 Question {i}"
-        )
-
-        st.markdown(
-            message["question"]
-        )
-
-
-        st.markdown(
-            "### 🤖 Answer"
-        )
-
-        st.markdown(
-            message["answer"]
-        )
-
-
-        # -----------------------------
-        # Sources
-        # -----------------------------
-
-        sources = message.get(
-            "sources",
-            []
-        )
-
-
-        if sources:
-
-            st.markdown(
-                "### 📚 Sources"
-            )
-
-
-            for source_index, source in enumerate(
-                sources,
-                start=1
-            ):
-
-                st.markdown(
-                    f"""
-                    **Source {source_index}**
-
-                    - 📄 File: `{source.get("filename")}`
-                    - 📑 Page: `{source.get("page")}`
-                    - 🔎 Distance: `{source.get("distance", 0):.4f}`
-                    """
+                st.error(
+                    f"Unexpected error: {str(e)}"
                 )
-
-
-        st.divider()

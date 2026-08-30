@@ -1,59 +1,114 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from pathlib import Path
 import shutil
 import uuid
 
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    HTTPException,
+    Depends
+)
+
 from sqlalchemy.orm import Session
 
 from app.db.models import Document
-from app.schemas.chat import ChatRequest
-from app.services.document_service import DocumentService
-from app.services.chat_service import ChatService
 
 from app.db.database import get_db
+
 from app.db.repository import (
     create_document,
     get_documents,
     get_document,
-    create_chat_session,
     delete_document,
-    create_chat_message,
     get_chat_sessions
 )
 
+from app.schemas.chat import ChatRequest
+
+from app.services.document_service import (
+    DocumentService
+)
+
+from app.services.chat_service import (
+    ChatService
+)
+
+
+# ============================================================
+# FASTAPI APPLICATION
+# ============================================================
+
 app = FastAPI(
     title="AI Research Assistant",
-    description="RAG-based document question answering system",
+    description=(
+        "RAG-based document question answering system"
+    ),
     version="1.0.0"
 )
 
 
-UPLOAD_DIR = Path("data/uploads")
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+# ============================================================
+# DIRECTORIES
+# ============================================================
+
+UPLOAD_DIR = Path(
+    "data/uploads"
+)
+
+UPLOAD_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+
+# ============================================================
+# SERVICES
+# ============================================================
 
 document_service = DocumentService()
+
 chat_service = ChatService()
 
 
+# ============================================================
+# ROOT
+# ============================================================
+
 @app.get("/")
 def root():
+
     return {
-        "message": "AI Research Assistant API is running"
+        "message": (
+            "AI Research Assistant API is running"
+        )
     }
 
 
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
 @app.get("/health")
 def health_check():
+
     return {
         "status": "healthy"
     }
 
 
+# ============================================================
+# DOCUMENTS
+# ============================================================
+
 @app.get("/documents")
 def list_documents(
     db: Session = Depends(get_db)
 ):
-    documents = get_documents(db=db)
+
+    documents = get_documents(
+        db=db
+    )
 
     return [
         {
@@ -67,19 +122,23 @@ def list_documents(
     ]
 
 
-
+# ============================================================
+# GET SINGLE DOCUMENT
+# ============================================================
 
 @app.get("/documents/{document_id}")
 def get_document_by_id(
     document_id: str,
     db: Session = Depends(get_db)
 ):
+
     document = get_document(
         db=db,
         document_id=document_id
     )
 
     if document is None:
+
         raise HTTPException(
             status_code=404,
             detail="Document not found."
@@ -94,12 +153,16 @@ def get_document_by_id(
     }
 
 
+# ============================================================
+# DELETE DOCUMENT
+# ============================================================
 
 @app.delete("/documents/{document_id}")
 def delete_document_by_id(
     document_id: str,
     db: Session = Depends(get_db)
 ):
+
     document = (
         db.query(Document)
         .filter(
@@ -109,79 +172,112 @@ def delete_document_by_id(
     )
 
     if not document:
+
         raise HTTPException(
             status_code=404,
             detail="Document not found."
         )
 
-    file_path = Path(document.file_path)
+    file_path = Path(
+        document.file_path
+    )
 
     try:
-        # Delete chunks from ChromaDB
+
+        # Delete ChromaDB vectors
         document_service.delete_document(
             document_id=document_id
         )
 
-        # Delete metadata from PostgreSQL
+        # Delete PostgreSQL metadata
         delete_document(
             db=db,
             document_id=document_id
         )
 
-        # Delete actual PDF file
+        # Delete actual PDF
         if file_path.exists():
+
             file_path.unlink()
 
         return {
-            "message": "Document deleted successfully.",
+            "message": (
+                "Document deleted successfully."
+            ),
             "document_id": document_id
         }
 
     except Exception as e:
+
         db.rollback()
 
         raise HTTPException(
             status_code=500,
-            detail=f"Document deletion failed: {str(e)}"
+            detail=(
+                f"Document deletion failed: {str(e)}"
+            )
         )
 
 
-
+# ============================================================
+# UPLOAD DOCUMENT
+# ============================================================
 
 @app.post("/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
+
     if not file.filename:
+
         raise HTTPException(
             status_code=400,
             detail="No filename provided."
         )
 
     if not file.filename.lower().endswith(".pdf"):
+
         raise HTTPException(
             status_code=400,
             detail="Only PDF files are supported."
         )
 
-    document_id = str(uuid.uuid4())
+    document_id = str(
+        uuid.uuid4()
+    )
 
-    file_path = UPLOAD_DIR / f"{document_id}_{file.filename}"
+    file_path = (
+        UPLOAD_DIR
+        / f"{document_id}_{file.filename}"
+    )
 
     try:
 
-        # Save uploaded PDF
-        with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # ----------------------------------------------------
+        # Save PDF
+        # ----------------------------------------------------
 
-        # Process PDF and store chunks in ChromaDB
+        with file_path.open("wb") as buffer:
+
+            shutil.copyfileobj(
+                file.file,
+                buffer
+            )
+
+        # ----------------------------------------------------
+        # Process PDF
+        # ----------------------------------------------------
+
         result = document_service.process_pdf(
             pdf_path=str(file_path),
             document_id=document_id
         )
 
-        # Save document metadata in PostgreSQL
+        # ----------------------------------------------------
+        # Save metadata
+        # ----------------------------------------------------
+
         create_document(
             db=db,
             document_id=document_id,
@@ -191,79 +287,124 @@ async def upload_document(
         )
 
         return {
-            "message": "Document uploaded and processed successfully.",
+            "message": (
+                "Document uploaded and processed "
+                "successfully."
+            ),
             **result
         }
 
     except Exception as e:
 
         if file_path.exists():
+
             file_path.unlink()
 
         db.rollback()
 
         raise HTTPException(
             status_code=500,
-            detail=f"Document processing failed: {str(e)}"
+            detail=(
+                f"Document processing failed: {str(e)}"
+            )
         )
 
     finally:
+
         await file.close()
 
+
+# ============================================================
+# CHAT SESSIONS
+# ============================================================
 
 @app.get("/chat")
 def list_chat_sessions(
     db: Session = Depends(get_db)
 ):
-    return get_chat_sessions(db=db)
 
+    return get_chat_sessions(
+        db=db
+    )
+
+
+# ============================================================
+# CHAT
+# ============================================================
 
 @app.post("/chat")
 def chat(
     request: ChatRequest,
     db: Session = Depends(get_db)
 ):
-    if not request.question.strip():
+
+    question = request.question.strip()
+
+    if not question:
+
         raise HTTPException(
             status_code=400,
             detail="Question cannot be empty."
         )
 
+    if not request.document_id:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Document ID is required."
+        )
+
     try:
+
         result = chat_service.answer_question(
             db=db,
-            question=request.question,
+            question=question,
             top_k=request.top_k,
             document_id=request.document_id,
-             session_id=request.session_id
+            session_id=request.session_id
         )
 
         return result
 
-    except Exception as e:
+    except ValueError as e:
+
         raise HTTPException(
-            status_code=500,
-            detail=f"Question processing failed: {str(e)}"
+            status_code=404,
+            detail=str(e)
         )
 
+    except Exception as e:
+
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Question processing failed: {str(e)}"
+            )
+        )
+
+
+# ============================================================
+# CHAT HISTORY
+# ============================================================
 
 @app.get("/chat/{session_id}")
 def get_chat_history(
     session_id: str,
     db: Session = Depends(get_db)
 ):
+
     history = chat_service.get_chat_history(
         db=db,
         session_id=session_id
     )
 
     if history is None:
+
         raise HTTPException(
             status_code=404,
             detail="Chat session not found."
         )
 
     return history
-
-    
-
