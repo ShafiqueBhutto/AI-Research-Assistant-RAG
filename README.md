@@ -26,6 +26,20 @@ Users can:
 
 The goal of this project is to build a practical AI Engineering application using modern backend, database, vector search, and LLM technologies.
 
+## 🖥️ Screenshots
+
+### Document Upload & Management
+
+![Document Upload](assets/screenshots/document-upload.png)
+
+### AI-Powered Question Answering
+
+![AI Answer](assets/screenshots/chat-response.png)
+
+### Chat History & Document Selection
+
+![Chat History](assets/screenshots/dashboard.png)
+
 ---
 
 ## ✨ Features
