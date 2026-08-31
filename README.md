@@ -26,6 +26,12 @@ Users can:
 
 The goal of this project is to build a practical AI Engineering application using modern backend, database, vector search, and LLM technologies.
 
+## 🎥 Demo
+
+See the AI Research Assistant in action:
+
+[▶️ Watch Demo Video](https://youtu.be/VT-teV_7XqI)
+
 ## 🖥️ Screenshots
 
 ### Document Upload & Management
